@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AgriPredict – Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg: #060d18;
+    --surface: #0c1829;
+    --surface2: #112036;
+    --border: #1e3a5f;
+    --accent: #00e5a0;
+    --accent2: #ff7c2a;
+    --accent3: #4d9fff;
+    --accent4: #c97bff;
+    --text: #e2eaf4;
+    --muted: #6b8aaa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    display: flex;
+    min-height: 100vh;
+  }
+  .sidebar {
+    width: 230px; min-height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 28px 20px;
+    display: flex; flex-direction: column; gap: 4px;
+    position: fixed; top: 0; left: 0;
+  }
+  .brand { font-family: 'Space Mono', monospace; font-size: 1.1rem; color: var(--accent); margin-bottom: 28px; }
+  .brand span { color: var(--text); }
+  .nav-item {
+    padding: 11px 14px; border-radius: 8px; cursor: pointer;
+    font-size: 0.9rem; color: var(--muted); transition: all .2s;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--accent); color: #000; font-weight: 600; }
+  .sidebar-footer { margin-top: auto; font-size: 0.75rem; color: var(--muted); padding: 10px 4px; }
+  .main { margin-left: 230px; flex: 1; padding: 36px 40px; }
+  .page-title { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--text); margin-bottom: 6px; }
+  .page-sub { color: var(--muted); font-size: 0.88rem; margin-bottom: 28px; }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 24px;
+  }
+  .chart-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .chart-subtitle { font-size: 0.82rem; color: var(--muted); margin-bottom: 18px; }
+  .chart-wrap { position: relative; height: 260px; }
+  .stat-row {
+    display: flex; gap: 16px; margin-bottom: 24px;
+  }
+  .stat-box {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .stat-value { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--text); }
+  .stat-change { font-size: 0.8rem; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="brand">🌱 Agri<span>Predict</span></div>
+  <div class="nav-item" onclick="location.href='/'">📊 Dashboard</div>
+  <div class="nav-item active">📈 Analytics</div>
+  <div class="nav-item" onclick="location.href='/market'">🏪 Market</div>
+  <div class="sidebar-footer">Real-time crop intelligence</div>
+</div>
+
+<div class="main">
+  <div class="page-title">Analytics</div>
+  <div class="page-sub">Price fluctuations, correlations & demand trends</div>
+
+  <!-- Stat row -->
+  <div class="stat-row">
+    <div class="stat-box">
+      <div class="stat-label">Avg Current Price</div>
+      <div class="stat-value" id="avgPrice">₹ --</div>
+      <div class="stat-change" style="color:var(--accent)">Across 30 records</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Avg Future Price</div>
+      <div class="stat-value" id="avgFuture">₹ --</div>
+      <div class="stat-change" id="priceDelta" style="color:var(--accent2)"></div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Avg Demand</div>
+      <div class="stat-value" id="avgDemand">--</div>
+      <div class="stat-change" style="color:var(--accent3)">kg / day</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Avg Rainfall</div>
+      <div class="stat-value" id="avgRain">-- mm</div>
+      <div class="stat-change" style="color:var(--accent4)">Current period</div>
+    </div>
+  </div>
+
+  <!-- Chart 1: Historical price + future overlay -->
+  <div class="chart-card">
+    <div class="chart-title">Historical Price Trend</div>
+    <div class="chart-subtitle">Current prices vs model-predicted future prices over 30 data points</div>
+    <div class="chart-wrap">
+      <canvas id="historicalChart"></canvas>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Chart 2: Price vs Rainfall scatter -->
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <div class="chart-title">Price vs Rainfall Correlation</div>
+        <div class="chart-subtitle">How rainfall affects market prices (each dot = 1 record)</div>
+        <div class="chart-wrap">
+          <canvas id="rainfallChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart 3: Price vs Demand bar -->
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <div class="chart-title">Price vs Demand</div>
+        <div class="chart-subtitle">Grouped bars — current price & demand per data point</div>
+        <div class="chart-wrap">
+          <canvas id="demandChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart 4: 7-day forecast line -->
+  <div class="chart-card">
+    <div class="chart-title">Price Fluctuation Volatility</div>
+    <div class="chart-subtitle">Day-over-day price change magnitude across the dataset</div>
+    <div class="chart-wrap">
+      <canvas id="volatilityChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+const labels       = {{ labels | tojson }};
+const prices       = {{ prices | tojson }};
+const demand       = {{ demand | tojson }};
+const rainfall     = {{ rainfall | tojson }};
+const futurePrices = {{ future_prices | tojson }};
+
+// ── Stats ───────────────────────────────────────────────────────────────────
+const avg = arr => (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1);
+document.getElementById('avgPrice').textContent  = '₹ ' + avg(prices);
+document.getElementById('avgFuture').textContent = '₹ ' + avg(futurePrices);
+document.getElementById('avgDemand').textContent = avg(demand);
+document.getElementById('avgRain').textContent   = avg(rainfall) + ' mm';
+
+const delta = (avg(futurePrices) - avg(prices)).toFixed(1);
+document.getElementById('priceDelta').textContent = (delta >= 0 ? '▲ +' : '▼ ') + delta + ' vs current';
+document.getElementById('priceDelta').style.color = delta >= 0 ? '#ff7c2a' : '#00e5a0';
+
+const GRID = 'rgba(30,58,95,0.45)';
+const TICK = { color: '#6b8aaa', font: { size: 11 } };
+
+// ── Chart 1: Historical trend ────────────────────────────────────────────────
+new Chart(document.getElementById('historicalChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: 'Current Price',
+        data: prices,
+        borderColor: '#4d9fff',
+        backgroundColor: 'rgba(77,159,255,0.07)',
+        borderWidth: 2,
+        pointRadius: 3,
+        tension: 0.4,
+        fill: true,
+      },
+      {
+        label: 'Future Price',
+        data: futurePrices,
+        borderColor: '#00e5a0',
+        backgroundColor: 'rgba(0,229,160,0.06)',
+        borderWidth: 2,
+        borderDash: [5, 4],
+        pointRadius: 3,
+        tension: 0.4,
+        fill: false,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        display: true,
+        labels: { color: '#6b8aaa', boxWidth: 24, font: { size: 11 } }
+      },
+      tooltip: {
+        backgroundColor: '#0c1829', borderColor: '#1e3a5f', borderWidth: 1,
+        titleColor: '#e2eaf4', bodyColor: '#6b8aaa',
+        callbacks: { label: ctx => ` ₹ ${ctx.parsed.y}` }
+      }
+    },
+    scales: {
+      x: { grid: { color: GRID }, ticks: { ...TICK, maxTicksLimit: 10 } },
+      y: { grid: { color: GRID }, ticks: { ...TICK, callback: v => '₹' + v } }
+    }
+  }
+});
+
+// ── Chart 2: Scatter – Price vs Rainfall ─────────────────────────────────────
+const scatterData = prices.map((p,i) => ({ x: rainfall[i], y: p }));
+new Chart(document.getElementById('rainfallChart'), {
+  type: 'scatter',
+  data: {
+    datasets: [{
+      label: 'Price vs Rainfall',
+      data: scatterData,
+      backgroundColor: 'rgba(201,123,255,0.5)',
+      pointRadius: 6,
+      pointHoverRadius: 8,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0c1829', borderColor: '#1e3a5f', borderWidth: 1,
+        titleColor: '#e2eaf4', bodyColor: '#6b8aaa',
+        callbacks: {
+          label: ctx => ` Rain: ${ctx.parsed.x} mm | Price: ₹${ctx.parsed.y}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        title: { display: true, text: 'Rainfall (mm)', color: '#6b8aaa' },
+        grid: { color: GRID }, ticks: TICK
+      },
+      y: {
+        title: { display: true, text: 'Price (₹)', color: '#6b8aaa' },
+        grid: { color: GRID },
+        ticks: { ...TICK, callback: v => '₹' + v }
+      }
+    }
+  }
+});
+
+// ── Chart 3: Bar – Price vs Demand (sampled every 3 points) ──────────────────
+const sample = (arr, step=3) => arr.filter((_,i) => i % step === 0);
+new Chart(document.getElementById('demandChart'), {
+  type: 'bar',
+  data: {
+    labels: sample(labels),
+    datasets: [
+      {
+        label: 'Price (₹)',
+        data: sample(prices),
+        backgroundColor: 'rgba(255,124,42,0.7)',
+        borderRadius: 5,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Demand (kg)',
+        data: sample(demand),
+        backgroundColor: 'rgba(0,229,160,0.35)',
+        borderRadius: 5,
+        yAxisID: 'y2',
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        display: true,
+        labels: { color: '#6b8aaa', boxWidth: 18, font: { size: 11 } }
+      },
+      tooltip: {
+        backgroundColor: '#0c1829', borderColor: '#1e3a5f', borderWidth: 1,
+        titleColor: '#e2eaf4', bodyColor: '#6b8aaa',
+      }
+    },
+    scales: {
+      x: { grid: { color: GRID }, ticks: TICK },
+      y: {
+        position: 'left',
+        grid: { color: GRID },
+        ticks: { ...TICK, callback: v => '₹' + v }
+      },
+      y2: {
+        position: 'right',
+        grid: { drawOnChartArea: false },
+        ticks: { ...TICK, callback: v => v + ' kg' }
+      }
+    }
+  }
+});
+
+// ── Chart 4: Volatility (day-over-day price change) ──────────────────────────
+const changes = prices.slice(1).map((p, i) => +(p - prices[i]).toFixed(2));
+const changeLabels = labels.slice(1);
+const changeColors = changes.map(v => v >= 0 ? 'rgba(255,124,42,0.7)' : 'rgba(0,229,160,0.7)');
+
+new Chart(document.getElementById('volatilityChart'), {
+  type: 'bar',
+  data: {
+    labels: changeLabels,
+    datasets: [{
+      label: 'Price Change (₹)',
+      data: changes,
+      backgroundColor: changeColors,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0c1829', borderColor: '#1e3a5f', borderWidth: 1,
+        titleColor: '#e2eaf4', bodyColor: '#6b8aaa',
+        callbacks: {
+          label: ctx => {
+            const v = ctx.parsed.y;
+            return ` ${v >= 0 ? '▲ +' : '▼ '}₹${Math.abs(v)}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: { grid: { color: GRID }, ticks: { ...TICK, maxTicksLimit: 12 } },
+      y: {
+        grid: { color: GRID },
+        ticks: { ...TICK, callback: v => (v >= 0 ? '+' : '') + '₹' + v }
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>
